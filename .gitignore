@@ -1,0 +1,42 @@
+# MSP430 build output files
+*.o
+*.obj
+*.elf
+*.out
+*.hex
+*.map
+*.lst
+*.asm
+
+# Dependency and intermediate files
+*.d
+*.dep
+*.tmp
+*.bak
+
+# Build directories (adjust names as needed)
+Debug/
+Release/
+build/
+Bin/
+Output/
+
+# IDE-specific files (uncomment or adjust if you use these IDEs)
+# Code Composer Studio (CCS) files
+*.ccxml
+*.launch
+
+# IAR Embedded Workbench files
+*.ewp
+*.ewd
+*.eww
+*.ewt
+*.ewpbuild/
+*.ewpbackup/
+
+# MSPGCC-specific temporary files
+*.srec
+
+# OS generated files
+.DS_Store
+Thumbs.db
