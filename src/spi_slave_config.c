@@ -72,9 +72,7 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
                 // Preload TXBUF with a default value for the next transaction.
                 UCA0TXBUF = 0x00;  // Set this to whatever default is appropriate.
                 
-                UCA0CTLW0 |= UCSWRST;
-                UCA0CTLW0 &= ~UCSWRST;
-
+                UCA0IFG &= ~UCRXIFG; // Clear stale
                 UCA0IE |= UCRXIE;   // Re-enable RX interrupts for the next packet.
             }
             break;
