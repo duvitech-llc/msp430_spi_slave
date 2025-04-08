@@ -9,6 +9,13 @@
 #define START_BYTE 0xAA
 #define END_BYTE 0xDD
 
+#define DUMMY_BYTE 0xDB
+#define SPI_SLAVE_DATA_LENGTH 6
+#define SPI_SLAVE_CMD_LENGTH (SPI_SLAVE_DATA_LENGTH + 3)
+
+#define SPI_SLAVE_REPLY_LENGTH 6
+
+
 typedef enum {
     N6_SPI_MODE_NORMAL = 0x00,
     N6_SPI_MODE_RECEIVING = 0x01,
@@ -52,6 +59,5 @@ typedef enum {
     N6_CMD_READ_DATA = 0x02,
     N6_CMD_WRITE_DATA = 0x03,
 } N6_SPI_Commands;
-
 
 #endif /* CORE_INC_SPI_COMMON_H_ */

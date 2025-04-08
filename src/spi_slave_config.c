@@ -10,13 +10,22 @@
 #include <stdio.h>
 #include <string.h>
 
-volatile uint8_t spiBuffer[PACKET_BUFFER_MAX_SIZE];
-volatile unsigned int pSpiSend;
+#define SS_PIN BIT4
+
+volatile uint8_t spiTxBuffer[SPI_SLAVE_REPLY_LENGTH] = {0};
+volatile uint8_t spiRxBuffer[SPI_SLAVE_CMD_LENGTH] = {0};
+volatile uint8_t spiRxIndex = 0;
+volatile uint8_t spiTxIndex = 0;
 
 void spi_slave_Init()
 {
 
-  P1SEL0 |= BIT4 | BIT5 | BIT6 | BIT7;      // set 4-SPI pin as second function
+  P1SEL0 |= BIT5 | BIT6 | BIT7;      // set 4-SPI pin as second function
+
+  // Configure Slave Select pin
+  P1DIR &= ~SS_PIN;       // Input
+  P1REN |= SS_PIN;        // Enable pull-up
+  P1OUT |= SS_PIN;
 
   UCA0CTLW0 |= UCSWRST;                     // **Put state machine in reset**
                                             // 4-pin, 8-bit SPI slave
@@ -25,15 +34,13 @@ void spi_slave_Init()
 
   UCA0CTLW0 |= UCSSEL__SMCLK; // Use SMCLK as clock source
   UCA0CTLW0 &= ~UCMST;        // Set as SPI slave
-  
-  PM5CTL0 &= ~LOCKLPM5;                     // Disable the GPIO power-on default high-impedance mode
-                                            // to activate previously configured port settings
+
   UCA0TXBUF = 0x00;                         // set to ready (use start packet byte)
   pSpiSend = 0;
   memset((void *)spiBuffer, 0, PACKET_BUFFER_MAX_SIZE);
-  UCA0CTLW0 &= ~UCSWRST;                    // **Initialize USCI state machine**
-  UCA0IE |= UCRXIE;                         // Enable USCI_A0 RX interrupt
 
+  UCA0CTLW0 &= ~UCSWRST;  // Release reset
+  
 }
 
 

@@ -21,6 +21,8 @@ static unsigned int count = 0;
 
 int main(void) {
   WDTCTL = WDTPW | WDTHOLD; // Stop watchdog timer
+  PM5CTL0 &= ~LOCKLPM5;         // Unlock GPIO
+  
   clock_init();
   gpio_init();
   uart_a_init();
