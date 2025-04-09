@@ -7,6 +7,7 @@
 #include "common.h"
 #include "sys/cdefs.h"
 #include "spi_slave_config.h"
+#include "crc.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -16,6 +17,11 @@ volatile uint8_t spiTxBuffer[SPI_SLAVE_REPLY_LENGTH] = {0};
 volatile uint8_t spiRxBuffer[SPI_SLAVE_CMD_LENGTH] = {0};
 volatile uint8_t spiRxIndex = 0;
 volatile uint8_t spiTxIndex = 0;
+
+static void execute_command(uint8_t cmd, const uint8_t* data)
+{
+    printf("Execute command: %d\r\n", cmd);
+}
 
 void spi_slave_Init()
 {
@@ -36,54 +42,57 @@ void spi_slave_Init()
   UCA0CTLW0 &= ~UCMST;        // Set as SPI slave
 
   UCA0TXBUF = 0x00;                         // set to ready (use start packet byte)
-  pSpiSend = 0;
-  memset((void *)spiBuffer, 0, PACKET_BUFFER_MAX_SIZE);
-
-  UCA0CTLW0 &= ~UCSWRST;  // Release reset
-  
+  UCA0CTLW0 &= ~UCSWRST;  // Release reset  
 }
 
+void spi_slave_poll_blocking(void) {
+    int i = 0;
 
-#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
-#pragma vector=USCI_A0_VECTOR
-__interrupt void USCI_A0_ISR(void)
-#elif defined(__GNUC__)
-void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
-#else
-#error Compiler not supported!
-#endif
-{
-    switch (__even_in_range(UCA0IV, 4))
-    {
-        case USCI_NONE:
-            break; // No interrupt
-        case USCI_SPI_UCRXIFG:
-            spiBuffer[pSpiSend++] = UCA0RXBUF;
-            if (pSpiSend >= PACKET_BUFFER_MAX_SIZE) {
-                UCA0IE &= ~UCRXIE;  // Disable further RX interrupts.
-                // Fill in temperature data into the last two bytes.
-                //spiBuffer[PACKET_BUFFER_MAX_SIZE-2] = (uint8_t)(rawTemp >> 8);  // High byte
-                //spiBuffer[PACKET_BUFFER_MAX_SIZE-1] = (uint8_t)(rawTemp & 0xFF);  // Low byte
-                pSpiSend = 0;
-                
-                UCA0IE |= UCTXIE;   // Enable TX interrupt for transmission.
-            }
-            break;
-        case USCI_SPI_UCTXIFG:
-            if (pSpiSend < PACKET_BUFFER_MAX_SIZE) {
-                UCA0TXBUF = spiBuffer[pSpiSend++];
-            } else {
-                UCA0IE &= ~UCTXIE;  // Disable TX interrupts.
-                memset((void *)spiBuffer, 0, PACKET_BUFFER_MAX_SIZE);
-                pSpiSend = 0;
-                // Preload TXBUF with a default value for the next transaction.
-                UCA0TXBUF = 0x00;  // Set this to whatever default is appropriate.
-                
-                UCA0IFG &= ~UCRXIFG; // Clear stale
-                UCA0IE |= UCRXIE;   // Re-enable RX interrupts for the next packet.
-            }
-            break;
-        default:
-            break;
+    // Step 1: Wait for CS to go low (master asserts)
+    while (P1IN & SS_PIN);  // Wait until SS is LOW (active)
+
+    spiRxIndex = 0;
+    spiTxIndex = 0;
+
+    // Step 2: Receive full SPI_SLAVE_CMD_LENGTH
+    while (spiRxIndex < SPI_SLAVE_CMD_LENGTH) {
+        while (!(UCA0IFG & UCRXIFG));                 // Wait for RX byte
+        spiRxBuffer[spiRxIndex++] = UCA0RXBUF;
+
+        while (!(UCA0IFG & UCTXIFG));                 // Wait for TX ready
+        UCA0TXBUF = ACK_BUSY;                         // Send BUSY until response is ready
     }
+
+    // Step 3: Check CRC
+    uint16_t received_crc = (spiRxBuffer[SPI_SLAVE_CMD_LENGTH - 1] << 8) |
+                             spiRxBuffer[SPI_SLAVE_CMD_LENGTH - 2];
+    uint16_t calc_crc = crc16_ccitt_hw((uint8_t *)spiRxBuffer, SPI_SLAVE_CMD_LENGTH - 2);
+
+    if (received_crc != calc_crc) {
+        spiTxBuffer[0] = ACK_BAD_CRC;
+        for (i = 1; i < SPI_SLAVE_REPLY_LENGTH; i++) spiTxBuffer[i] = 0x00;
+    } else {
+        // Step 4: Process command
+        execute_command((uint8_t)spiRxBuffer[0], (uint8_t *)&spiRxBuffer[1]);
+        // The reply is assumed to be filled into spiTxBuffer
+    }
+
+    // Step 5: Wait for CS to go high then low again for transmit phase
+    while (!(P1IN & SS_PIN));  // Wait for CS HIGH
+    while (P1IN & SS_PIN);     // Wait for CS LOW again
+
+    spiTxIndex = 0;
+
+    // Step 6: Transmit SPI_SLAVE_REPLY_LENGTH bytes
+    while (spiTxIndex < SPI_SLAVE_REPLY_LENGTH) {
+        while (!(UCA0IFG & UCRXIFG));                 // Wait for dummy byte from master
+        volatile uint8_t dummy = UCA0RXBUF;
+
+        while (!(UCA0IFG & UCTXIFG));
+        UCA0TXBUF = spiTxBuffer[spiTxIndex++];
+    }
+
+    // Final state: optional reset
+    spiRxIndex = 0;
+    spiTxIndex = 0;
 }

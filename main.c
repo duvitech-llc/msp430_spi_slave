@@ -17,7 +17,6 @@
 volatile bool send_receive_slave = false;
 
 volatile uint16_t bFlag = 1;
-static unsigned int count = 0;
 
 int main(void) {
   WDTCTL = WDTPW | WDTHOLD; // Stop watchdog timer

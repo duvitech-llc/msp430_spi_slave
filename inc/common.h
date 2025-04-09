@@ -15,6 +15,15 @@
 
 #define SPI_SLAVE_REPLY_LENGTH 6
 
+typedef enum {
+    ACK_READY = 0x70,
+    ACK_WAITING_NEXT = 0x71,
+    ACK_OK = 0x72,
+    ACK_BUSY = 0x73,
+    ACK_REPLY_START = 0x74,
+    ACK_BAD_CRC = 0x75,
+    ACK_ERROR_START = 0x77
+} Ack;
 
 typedef enum {
     N6_SPI_MODE_NORMAL = 0x00,
